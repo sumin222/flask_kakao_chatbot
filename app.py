@@ -1,7 +1,8 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 import random
 import requests
 from bs4 import BeautifulSoup
+from sqlalchemy.sql.expression import func
 
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -15,11 +16,16 @@ app.config["SQLALCHEMY_TRACK_MODIFICATION"] = False
 db.init_app(app)
 migrate = Migrate(app,db)
 
+@app.route('/')
+def index():
+    movies = Movie.query.all()
+    return render_template('index.html',movies=movies)
+
 @app.route('/keyboard')
 def keyboard():
     keyboard = {
         "type" : "buttons",
-        "buttons" : ["메뉴","로또","고양이","영화"]
+        "buttons" : ["메뉴","로또","고양이","영화","영화저장"]
     }
     
     return jsonify(keyboard)
@@ -55,6 +61,11 @@ def message():
         msg = "나만 고양이 없어 :("
     elif user_msg == "영화":
         img_bool = True
+        movie = Movie.query.order_by(func.random()).first()
+        msg = movie.title + ' / ' + str(movie.star)
+        url = movie.img
+    elif user_msg == "영화저장":
+        db.session.query(Movie).delete()
         naver_movie = 'https://movie.naver.com/movie/running/current.nhn'
         req = requests.get(naver_movie).text
         soup = BeautifulSoup(req, 'html.parser')
@@ -70,18 +81,22 @@ def message():
                 'star':star_list[i].text,
                 'url':img_url_list[i]['src']
             }
-        num = random.randrange(0,5)
-        pick_movie = movies[num]
-        msg = pick_movie['title'] +'/'+ pick_movie['star']
-        url = pick_movie['url']
-    
+        for i in range(0,5):
+            movie=Movie(
+                title_list[i].text,
+                star_list[i].text,
+                img_url_list[i]['src']
+            )
+            db.session.add(movie)
+            db.session.commit()
+        msg = "저장완료"
     return_dict = {
         'message':{
             'text':msg
         },
         'keyboard':{
             "type" : "buttons",
-            "buttons" : ["로또","메뉴","고양이","영화"]
+            "buttons" : ["로또","메뉴","고양이","영화","영화저장"]
         }
     }
     return_img_dict = {
@@ -95,7 +110,7 @@ def message():
         },
         'keyboard':{
             "type" : "buttons",
-            "buttons" : ["로또","메뉴","고양이","영화"]
+            "buttons" : ["로또","메뉴","고양이","영화","영화저장"]
         }
     }
     
